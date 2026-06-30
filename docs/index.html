@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Catasto San Felice del Molise — MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link href="https://unpkg.com/maplibre-gl@5.9.0/dist/maplibre-gl.css" rel="stylesheet">
+  <script src="https://unpkg.com/maplibre-gl@5.9.0/dist/maplibre-gl.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+    }
+
+    #panel {
+      position: absolute;
+      z-index: 10;
+      top: 12px;
+      left: 12px;
+      background: rgba(255,255,255,0.94);
+      padding: 12px;
+      border-radius: 12px;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.24);
+      max-width: 405px;
+      font-size: 14.5px;
+      line-height: 1.45;
+      border: 1px solid rgba(0,0,0,0.12);
+      backdrop-filter: blur(8px);
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+    }
+
+    #panel h2 {
+      margin: 0 0 8px 0;
+      font-size: 16.5px;
+      letter-spacing: -0.01em;
+    }
+
+    #panel label {
+      display: block;
+      margin: 4px 0;
+      padding: 5px 6px;
+      border-radius: 8px;
+      transition:
+        background-color 160ms ease,
+        transform 160ms ease,
+        box-shadow 160ms ease;
+    }
+
+    #panel label:hover {
+      background: rgba(46, 125, 50, 0.08);
+      transform: translateX(2px);
+    }
+
+    #panel input[type="checkbox"] {
+      transform: scale(1.05);
+      margin-right: 4px;
+    }
+
+    #btn-focus-place {
+      width: 100%;
+      margin: 8px 0;
+      padding: 8px 10px;
+      border: 1px solid #999;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 160ms ease, transform 160ms ease;
+    }
+
+    #btn-focus-place:hover {
+      background: #f1f8e9;
+      transform: translateY(-1px);
+    }
+
+    .legend-section-title {
+      margin: 10px 0 6px 0;
+      font-size: 14.5px;
+      font-weight: 800;
+      color: #1b5e20;
+      letter-spacing: -0.01em;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 5px 0;
+    }
+
+    .swatch {
+      width: 17px;
+      height: 13px;
+      border: 1px solid #333;
+      display: inline-block;
+      border-radius: 3px;
+      flex: 0 0 17px;
+    }
+
+    .swatch-parcels {
+      background: rgba(33,150,243,0.14);
+      border-color: #1565c0;
+    }
+
+    .swatch-sheets {
+      background: rgba(255,152,0,0.10);
+      border-color: #ff9800;
+    }
+
+    .swatch-labels {
+      background: #ffffff;
+      border-color: #111111;
+    }
+
+    .swatch-genova {
+      background: rgba(46,125,50,0.34);
+      border-color: #1b5e20;
+    }
+
+    .swatch-ortho {
+      background: linear-gradient(135deg, #7ca982, #d6c18a);
+      border-color: #5d6f45;
+    }
+
+    .genova-legend-row {
+      padding: 5px 6px;
+      border-radius: 8px;
+      background: rgba(46,125,50,0.06);
+    }
+
+    .genova-info-card {
+      margin: 8px 0 2px 0;
+      padding: 10px 11px;
+      border-radius: 11px;
+      background:
+        linear-gradient(135deg, rgba(232, 245, 233, 0.98), rgba(255, 248, 225, 0.96));
+      border: 1px solid rgba(46, 125, 50, 0.28);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.10);
+    }
+
+    .genova-info-title {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 800;
+      color: #1b5e20;
+      margin-bottom: 6px;
+    }
+
+    .genova-dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #2e7d32;
+      box-shadow: 0 0 0 3px rgba(46,125,50,0.14);
+      display: inline-block;
+    }
+
+    .genova-click-info {
+      padding: 8px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.80);
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .genova-click-info b {
+      color: #1b5e20;
+    }
+
+    .genova-subtle {
+      color: #47545a;
+      font-size: 12.5px;
+    }
+
+    .genova-empty {
+      color: #65736b;
+      font-style: italic;
+    }
+
+    @media (max-width: 820px) {
+      #panel {
+        left: 10px;
+        right: 10px;
+        top: 10px;
+        max-width: none;
+        max-height: 45vh;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <div id="panel">
+    <h2>Catasto — San Felice del Molise</h2>
+
+    <button id="btn-focus-place" type="button">
+      Vai all’area di focus
+    </button>
+
+    <div class="legend-section-title">Sfondo e dati catastali</div>
+
+    <label>
+      <input id="chk-pcn-ortho" type="checkbox" checked >
+      Ortofoto 2012 ufficiale
+    </label>
+
+    <label>
+      <input id="chk-satellite" type="checkbox">
+      Satellite basemap
+    </label>
+
+    <label>
+      <input id="chk-parcels" type="checkbox" checked>
+      Particelle catastali
+    </label>
+
+    <label>
+      <input id="chk-sheets" type="checkbox" checked>
+      Fogli catastali
+    </label>
+
+    <label>
+      <input id="chk-labels" type="checkbox" checked>
+      Target particella labels
+    </label>
+
+    <label>
+      <input id="chk-wms" type="checkbox" >
+      AdE WMS comparison layer
+    </label>
+
+    <div class="legend-item">
+      <span class="swatch swatch-ortho"></span>
+      Ortofoto ufficiale 2012
+    </div>
+
+    <div class="legend-item">
+      <span class="swatch swatch-parcels"></span>
+      Particelle catastali
+    </div>
+
+    <div class="legend-item">
+      <span class="swatch swatch-sheets"></span>
+      Fogli catastali
+    </div>
+
+    <div class="legend-item">
+      <span class="swatch swatch-labels"></span>
+      Numeri particella target, solo Foglio 13
+    </div>
+
+    <hr>
+
+    <div class="legend-section-title">
+      Terreni famiglia Genova — Foglio 13
+    </div>
+
+    <label class="layer-toggle genova-layer-toggle">
+      <input id="chk-genova-family" type="checkbox" checked>
+      Mostra terreni famiglia Genova
+    </label>
+
+    <div class="legend-item genova-legend-row">
+      <span class="swatch swatch-genova"></span>
+      Particelle con diritti indicati
+    </div>
+
+    <div class="genova-info-card" id="genova-info-card">
+      <div class="genova-info-title">
+        <span class="genova-dot"></span>
+        <span>Dettaglio particella</span>
+      </div>
+
+      <div class="genova-click-info" id="genova-click-info">
+        <span class="genova-empty">Nessuna particella selezionata.</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const FOCUS_CENTER = [14.70308095, 41.89005547];
+    const FOCUS_ZOOM = 18.0;
+    const FOCUS_FOGLIO = "13";
+    const TARGET_LABEL_PARTICELLE = ["173", "383", "391", "555", "556", "557", "558", "559", "560", "561", "562", "563", "564", "565", "566", "567", "569", "570", "571", "572", "573", "575", "576", "580", "581", "582", "583", "584", "585", "586", "587", "591", "592", "594", "595", "597", "598", "600", "601", "604", "605", "606", "607", "611", "612", "613", "614", "616", "617", "619", "622", "623", "624", "625", "626", "627", "628", "635", "636", "637", "640", "641", "642", "650", "651", "669", "700", "701", "703", "707", "725", "726", "727", "736", "739", "790", "802", "834", "835", "836", "837", "838", "839", "840", "841", "842", "843", "844", "852", "853", "854", "855", "856", "857", "862", "887", "888", "889", "890", "891", "892", "893", "894", "895", "896", "925", "926", "927", "928", "929", "930", "931", "932", "934", "941", "947", "1007"];
+
+    const PCN_ORTHO_AVAILABLE = true;
+    const ADE_WMS_AVAILABLE = true;
+
+    const map = new maplibregl.Map({
+      container: "map",
+      center: FOCUS_CENTER,
+      zoom: FOCUS_ZOOM,
+      renderWorldCopies: false,
+      style: {
+        version: 8,
+        glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+        sources: {
+          osm: {
+            type: "raster",
+            tiles: [
+              "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            ],
+            tileSize: 256,
+            attribution: "© OpenStreetMap contributors"
+          },
+          satellite: {
+            type: "raster",
+            tiles: [
+              "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            ],
+            tileSize: 256,
+            maxzoom: 18,
+            attribution: "Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+          }
+        },
+        layers: [
+          {
+            id: "osm",
+            type: "raster",
+            source: "osm",
+            layout: {
+              visibility: "visible"
+            }
+          },
+          {
+            id: "satellite",
+            type: "raster",
+            source: "satellite",
+            layout: {
+              visibility: "none"
+            }
+          }
+        ]
+      }
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.addControl(new maplibregl.ScaleControl({ unit: "metric" }));
+
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function setVis(layerIds, visible) {
+      for (const id of layerIds) {
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+        }
+      }
+    }
+
+    async function loadImageGrid(manifestUrl, prefix, beforeLayerId, opacity, initialVisible) {
+      const response = await fetch(manifestUrl, { cache: "no-cache" });
+
+      if (!response.ok) {
+        throw new Error(`${manifestUrl}: HTTP ${response.status}`);
+      }
+
+      const manifest = await response.json();
+      const tiles = manifest.tiles || [];
+      const layerIds = [];
+
+      for (let i = 0; i < tiles.length; i++) {
+        const tile = tiles[i];
+        const sourceId = `${prefix}-source-${i}`;
+        const layerId = `${prefix}-layer-${i}`;
+
+        if (!map.getSource(sourceId)) {
+          map.addSource(sourceId, {
+            type: "image",
+            url: tile.url,
+            coordinates: tile.coordinates
+          });
+        }
+
+        if (!map.getLayer(layerId)) {
+          const layerDef = {
+            id: layerId,
+            type: "raster",
+            source: sourceId,
+            layout: {
+              visibility: initialVisible ? "visible" : "none"
+            },
+            paint: {
+              "raster-opacity": opacity
+            }
+          };
+
+          const beforeId = beforeLayerId && map.getLayer(beforeLayerId)
+            ? beforeLayerId
+            : undefined;
+
+          if (beforeId) {
+            map.addLayer(layerDef, beforeId);
+          } else {
+            map.addLayer(layerDef);
+          }
+        }
+
+        layerIds.push(layerId);
+      }
+
+      console.log(`Loaded ${prefix}: ${layerIds.length} image layers`);
+      return layerIds;
+    }
+
+    let pcnOrthoLayerIds = [];
+    let pcnOrthoLoaded = false;
+
+    async function ensurePcnOrthoLoaded() {
+      if (!PCN_ORTHO_AVAILABLE) {
+        alert("Ortofoto 2012 locale non disponibile. Rilanciare lo script di download.");
+        return false;
+      }
+
+      if (pcnOrthoLoaded) {
+        return true;
+      }
+
+      try {
+        pcnOrthoLayerIds = await loadImageGrid(
+          "data/pcn_ortho_2012_manifest.json",
+          "pcn-ortho-2012",
+          "sheets-fill",
+          1.0,
+          true
+        );
+
+        pcnOrthoLoaded = true;
+        return true;
+      } catch (err) {
+        console.error(err);
+        alert("Errore caricando Ortofoto 2012 locale. Controllare console.");
+        return false;
+      }
+    }
+
+    function setPcnOrthoVisible(visible) {
+      setVis(pcnOrthoLayerIds, visible);
+    }
+
+    let adeWmsLayerIds = [];
+    let adeWmsLoaded = false;
+
+    async function ensureAdeWmsLoaded() {
+      if (!ADE_WMS_AVAILABLE) {
+        alert("Snapshot AdE WMS non disponibile.");
+        return false;
+      }
+
+      if (adeWmsLoaded) {
+        return true;
+      }
+
+      try {
+        adeWmsLayerIds = await loadImageGrid(
+          "data/ade_wms_manifest.json",
+          "ade-wms-local",
+          "sheets-fill",
+          0.58,
+          false
+        );
+
+        adeWmsLoaded = true;
+        return true;
+      } catch (err) {
+        console.error(err);
+        alert("Errore caricando snapshot AdE WMS locale.");
+        return false;
+      }
+    }
+
+    function setAdeWmsVisible(visible) {
+      setVis(adeWmsLayerIds, visible);
+    }
+
+    function updateGenovaInfo(props) {
+      const el = document.getElementById("genova-click-info");
+
+      if (!el) {
+        return;
+      }
+
+      if (!props) {
+        el.innerHTML = `<span class="genova-empty">Nessuna particella selezionata.</span>`;
+        return;
+      }
+
+      const foglio = props.foglio || "n/d";
+      const particella = props.particella || props.label || props.genova_particella || "n/d";
+      const rights = props.genova_rights || "Diritto non specificato";
+      const ref = props.national_ref || props.NATIONALCADASTRALREFERENCE || "";
+
+      el.innerHTML = `
+        <div><b>Foglio ${esc(foglio)} — Particella ${esc(particella)}</b></div>
+        <div><b>Diritto:</b> ${esc(rights)}</div>
+        ${ref ? `<div class="genova-subtle"><b>Ref:</b> ${esc(ref)}</div>` : ""}
+      `;
+    }
+
+    map.on("load", async () => {
+      map.addSource("sheets", {
+        type: "geojson",
+        data: "data/sheets.geojson"
+      });
+
+      map.addSource("parcels", {
+        type: "geojson",
+        data: "data/parcels.geojson"
+      });
+
+      map.addLayer({
+        id: "sheets-fill",
+        type: "fill",
+        source: "sheets",
+        paint: {
+          "fill-color": "#ff9800",
+          "fill-opacity": 0.03
+        }
+      });
+
+      map.addLayer({
+        id: "sheets-line",
+        type: "line",
+        source: "sheets",
+        paint: {
+          "line-color": "#ff9800",
+          "line-width": 2.4
+        }
+      });
+
+      map.addLayer({
+        id: "parcels-fill",
+        type: "fill",
+        source: "parcels",
+        paint: {
+          "fill-color": "#2196f3",
+          "fill-opacity": 0.04
+        }
+      });
+
+      map.addLayer({
+        id: "parcels-line",
+        type: "line",
+        source: "parcels",
+        paint: {
+          "line-color": "#1565c0",
+          "line-width": 0.85,
+          "line-opacity": 0.88
+        }
+      });
+
+      map.addLayer({
+        id: "genova-family-fill",
+        type: "fill",
+        source: "parcels",
+        filter: [
+          "all",
+          ["==", ["get", "genova_family"], true],
+          ["==", ["to-string", ["coalesce", ["get", "foglio"], ""]], FOCUS_FOGLIO]
+        ],
+        paint: {
+          "fill-color": "#2e7d32",
+          "fill-opacity": [
+            "case",
+            ["boolean", ["feature-state", "hover"], false],
+            0.54,
+            0.34
+          ],
+          "fill-opacity-transition": {
+            "duration": 180
+          }
+        }
+      });
+
+      map.addLayer({
+        id: "genova-family-line",
+        type: "line",
+        source: "parcels",
+        filter: [
+          "all",
+          ["==", ["get", "genova_family"], true],
+          ["==", ["to-string", ["coalesce", ["get", "foglio"], ""]], FOCUS_FOGLIO]
+        ],
+        paint: {
+          "line-color": "#1b5e20",
+          "line-width": [
+            "case",
+            ["boolean", ["feature-state", "hover"], false],
+            4.2,
+            2.2
+          ],
+          "line-opacity": 0.98,
+          "line-width-transition": {
+            "duration": 180
+          }
+        }
+      });
+
+      map.addLayer({
+        id: "parcel-labels",
+        type: "symbol",
+        source: "parcels",
+        minzoom: 14,
+        filter: [
+          "all",
+          ["==", ["to-string", ["coalesce", ["get", "foglio"], ""]], FOCUS_FOGLIO],
+          [
+            "in",
+            ["to-string", ["coalesce", ["get", "particella"], ["get", "label"], ""]],
+            ["literal", TARGET_LABEL_PARTICELLE]
+          ]
+        ],
+        layout: {
+          "text-field": ["to-string", ["coalesce", ["get", "particella"], ["get", "label"], ""]],
+          "text-size": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            14, 10,
+            16, 12,
+            18, 15,
+            20, 18
+          ],
+          "text-font": ["Noto Sans Regular"],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true
+        },
+        paint: {
+          "text-color": "#111111",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 2.0
+        }
+      });
+
+      let hoveredGenovaId = null;
+
+      map.on("mousemove", "genova-family-fill", (e) => {
+        if (hoveredGenovaId !== null && hoveredGenovaId !== undefined) {
+          map.setFeatureState(
+            { source: "parcels", id: hoveredGenovaId },
+            { hover: false }
+          );
+        }
+
+        const feature = e.features && e.features[0];
+
+        if (feature && feature.id !== null && feature.id !== undefined) {
+          hoveredGenovaId = feature.id;
+          map.setFeatureState(
+            { source: "parcels", id: hoveredGenovaId },
+            { hover: true }
+          );
+        }
+
+        map.getCanvas().style.cursor = "pointer";
+      });
+
+      map.on("mouseleave", "genova-family-fill", () => {
+        if (hoveredGenovaId !== null && hoveredGenovaId !== undefined) {
+          map.setFeatureState(
+            { source: "parcels", id: hoveredGenovaId },
+            { hover: false }
+          );
+        }
+
+        hoveredGenovaId = null;
+        map.getCanvas().style.cursor = "";
+      });
+
+      map.on("click", "genova-family-fill", (e) => {
+        const feature = e.features && e.features[0];
+
+        if (feature) {
+          updateGenovaInfo(feature.properties || {});
+        }
+      });
+
+      document.getElementById("btn-focus-place").addEventListener("click", () => {
+        map.flyTo({
+          center: FOCUS_CENTER,
+          zoom: FOCUS_ZOOM,
+          duration: 700
+        });
+      });
+
+      document.getElementById("chk-satellite").addEventListener("change", (e) => {
+        if (e.target.checked) {
+          map.setLayoutProperty("satellite", "visibility", "visible");
+          map.setLayoutProperty("osm", "visibility", "none");
+        } else {
+          map.setLayoutProperty("satellite", "visibility", "none");
+          map.setLayoutProperty("osm", "visibility", "visible");
+        }
+      });
+
+      document.getElementById("chk-parcels").addEventListener("change", (e) => {
+        setVis(["parcels-fill", "parcels-line"], e.target.checked);
+      });
+
+      document.getElementById("chk-sheets").addEventListener("change", (e) => {
+        setVis(["sheets-fill", "sheets-line"], e.target.checked);
+      });
+
+      document.getElementById("chk-labels").addEventListener("change", (e) => {
+        setVis(["parcel-labels"], e.target.checked);
+      });
+
+      document.getElementById("chk-genova-family").addEventListener("change", (e) => {
+        setVis(["genova-family-fill", "genova-family-line"], e.target.checked);
+      });
+
+      document.getElementById("chk-pcn-ortho").addEventListener("change", async (e) => {
+        const ok = await ensurePcnOrthoLoaded();
+
+        if (!ok) {
+          e.target.checked = false;
+          return;
+        }
+
+        setPcnOrthoVisible(e.target.checked);
+      });
+
+      document.getElementById("chk-wms").addEventListener("change", async (e) => {
+        const ok = await ensureAdeWmsLoaded();
+
+        if (!ok) {
+          e.target.checked = false;
+          return;
+        }
+
+        setAdeWmsVisible(e.target.checked);
+      });
+
+      updateGenovaInfo(null);
+
+      if (PCN_ORTHO_AVAILABLE) {
+        await ensurePcnOrthoLoaded();
+        setPcnOrthoVisible(true);
+      }
+
+      map.jumpTo({
+        center: FOCUS_CENTER,
+        zoom: FOCUS_ZOOM
+      });
+    });
+  </script>
+</body>
+</html>
