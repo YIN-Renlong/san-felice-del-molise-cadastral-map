@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 _patch_backups/
 .env
+ai_prompt_bundle.xml
+ai_prompt_bundle.txt
+*.prompt.xml
+*.prompt.txt
