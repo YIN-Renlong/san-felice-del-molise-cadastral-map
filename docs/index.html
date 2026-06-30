@@ -196,6 +196,140 @@
         max-height: 45vh;
       }
     }
+  
+/* Mobile legend/panel collapse: start */
+#panel {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.10);
+  background: rgba(255,255,255,0.96);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.panel-header h2 {
+  margin: 0 !important;
+  font-size: 16.5px;
+  line-height: 1.15;
+}
+
+.panel-toggle-btn {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border: 1px solid rgba(0,0,0,0.22);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1b1b1b;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.14);
+  transition:
+    background-color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.panel-toggle-btn:hover {
+  background: #f1f8e9;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+
+.panel-body {
+  padding: 0 12px 12px 12px;
+  overflow: auto;
+  max-height: calc(100vh - 92px);
+}
+
+#panel.collapsed .panel-body {
+  display: none;
+}
+
+#panel.collapsed {
+  max-height: none !important;
+}
+
+#panel.collapsed .panel-header {
+  border-bottom: 0;
+}
+
+@media (max-width: 820px) {
+  #panel {
+    top: auto !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: max(10px, env(safe-area-inset-bottom)) !important;
+    max-width: none !important;
+    width: auto !important;
+    max-height: min(62dvh, calc(100dvh - 82px)) !important;
+    border-radius: 17px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.30) !important;
+  }
+
+  .panel-header {
+    padding: 10px 12px;
+    border-radius: 17px 17px 0 0;
+  }
+
+  .panel-header h2 {
+    font-size: 15.5px;
+    max-width: calc(100vw - 92px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .panel-body {
+    padding: 0 12px 12px 12px;
+    max-height: calc(min(62dvh, calc(100dvh - 82px)) - 56px);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #panel.collapsed {
+    max-height: 54px !important;
+    opacity: 0.97;
+  }
+
+  #panel.collapsed .panel-header {
+    border-radius: 17px;
+  }
+
+  #panel.collapsed .panel-toggle-btn {
+    background: #f1f8e9;
+  }
+}
+
+@media (max-width: 480px) {
+  #panel {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  .panel-header h2 {
+    font-size: 14.5px;
+  }
+
+  .panel-toggle-btn {
+    width: 31px;
+    height: 31px;
+    flex-basis: 31px;
+  }
+}
+/* Mobile legend/panel collapse: end */
+
   </style>
 </head>
 
@@ -203,7 +337,19 @@
   <div id="map"></div>
 
   <div id="panel">
-    <h2>Catasto — San Felice del Molise</h2>
+    <div class="panel-header" id="panel-header">
+      <h2>Catasto — San Felice del Molise</h2>
+      <button
+        id="panel-toggle-btn"
+        class="panel-toggle-btn"
+        type="button"
+        aria-expanded="true"
+        aria-label="Collapse legend"
+        title="Show/hide legend"
+      >−</button>
+    </div>
+
+    <div class="panel-body" id="panel-body">
 
     <button id="btn-focus-place" type="button">
       Vai all’area di focus
@@ -286,6 +432,7 @@
       <div class="genova-click-info" id="genova-click-info">
         <span class="genova-empty">Nessuna particella selezionata.</span>
       </div>
+    </div>
     </div>
   </div>
 
@@ -514,6 +661,77 @@
         ${ref ? `<div class="genova-subtle"><b>Ref:</b> ${esc(ref)}</div>` : ""}
       `;
     }
+
+
+    // Mobile legend/panel collapse: start
+    function setupResponsiveLegendPanel() {
+      const panel = document.getElementById("panel");
+      const button = document.getElementById("panel-toggle-btn");
+
+      if (!panel || !button) {
+        return;
+      }
+
+      const mobileQuery = window.matchMedia("(max-width: 820px)");
+      let userToggled = false;
+
+      function setCollapsed(collapsed) {
+        panel.classList.toggle("collapsed", collapsed);
+
+        button.textContent = collapsed ? "+" : "−";
+        button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        button.setAttribute(
+          "aria-label",
+          collapsed ? "Expand legend" : "Collapse legend"
+        );
+        button.setAttribute(
+          "title",
+          collapsed ? "Show legend" : "Hide legend"
+        );
+      }
+
+      function applyResponsiveDefault() {
+        if (userToggled) {
+          return;
+        }
+
+        // Mobile starts collapsed to protect map viewing space.
+        // Desktop starts expanded.
+        setCollapsed(mobileQuery.matches);
+      }
+
+      button.addEventListener("click", () => {
+        userToggled = true;
+        setCollapsed(!panel.classList.contains("collapsed"));
+      });
+
+      // Allow tapping the header on mobile, except directly on the button.
+      const header = document.getElementById("panel-header");
+      if (header) {
+        header.addEventListener("click", (event) => {
+          if (event.target === button) {
+            return;
+          }
+
+          if (mobileQuery.matches) {
+            userToggled = true;
+            setCollapsed(!panel.classList.contains("collapsed"));
+          }
+        });
+      }
+
+      applyResponsiveDefault();
+
+      if (typeof mobileQuery.addEventListener === "function") {
+        mobileQuery.addEventListener("change", applyResponsiveDefault);
+      } else if (typeof mobileQuery.addListener === "function") {
+        mobileQuery.addListener(applyResponsiveDefault);
+      }
+    }
+
+    setupResponsiveLegendPanel();
+    // Mobile legend/panel collapse: end
+
 
     map.on("load", async () => {
       map.addSource("sheets", {
