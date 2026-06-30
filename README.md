@@ -1298,3 +1298,44 @@ Optional local official WMS/orthophoto image overlays
 The current map is focused on Foglio 13 in San Felice del Molise and highlights Genova family-related parcels in green for visual review.
 
 For legal-grade conclusions, further work should use official project vector data, explicit foglio+particella ownership tables, metric CRS intersection calculations, and professional survey validation.
+
+---
+
+## 21. AI prompt usage
+
+For AI handoff, do **not** include the full generated GeoJSON parcel files by default.
+
+Large generated files currently include:
+
+~~~text
+docs/data/parcels.geojson
+docs/data/genova_family_parcels.geojson
+~~~
+
+They remain necessary for the web map, but they are inefficient for AI prompts because they mostly contain coordinate arrays.
+
+Instead, use:
+
+~~~text
+README.md
+AI_DATA_SUMMARY.md
+docs/index.html
+scripts/
+docs/data/*manifest.json
+~~~
+
+A helper script is provided:
+
+~~~bash
+scripts/make_ai_prompt.sh
+~~~
+
+It creates:
+
+~~~text
+ai_prompt_bundle.xml
+~~~
+
+and excludes large generated geometry and raster tile files.
+
+If exact geometry debugging is needed, extract only the specific parcel feature, for example Foglio 13 / Particella 594, rather than sending the entire `parcels.geojson`.
